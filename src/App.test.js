@@ -5,6 +5,6 @@ import '@testing-library/jest-dom'
 describe('App', () => {
   it('should render while authenticating', () => {
       render(<App />);
-      expect(screen.getByText('Vite + Reactooooo')).toBeInTheDocument();
+      expect(screen.getByText('New text')).toBeInTheDocument();
   });
 });
