@@ -1,0 +1,22 @@
+name: Build docker after pr is merged
+
+inputs:
+  commit-hash:  # id of pr's commit
+    required: true
+    type: string
+  docker-password:
+    required: true
+    type: string
+  user-name:
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Docker build
+      run: docker build -t cicd-learning-image:${{ inputs.commit-hash }} .
+    - name: Docker login
+      run: docker login -u ${{ inputs.user-name }} -p ${{ inputs.docker-password }}
+    - name: Docker tag
+      run: docker tag cicd-learning-image:${{ inputs.commit-hash }} ${{ inputs.user-name }}/cicd-learning-image:${{ inputs.commit-hash }}
