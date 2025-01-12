@@ -11,28 +11,69 @@ on:
 # A "job" is a set of steps that are executed on the same runner
 jobs:
   # Name of the job
-  test-and-build-docker-image:
+  test-and-builds-docker-image:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: checkout codes
         uses: actions/checkout@v4
 
-      - name: Use Node.js 16.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: '16.x'
+      - name: Determine which library be used
+        id: package_manager
+        shell: bash
+        run: |
+          echo "name=$([ -f ./yarn.lock ] && echo "yarn" || ([ -f ./package-lock.json ] && echo "npm") || echo "pnpm")" >> $GITHUB_OUTPUT
 
-      - name: find cache node module
+      - name: use the node_module cache if available [npm]
+        if: steps.package_manager.outputs.name == 'npm'
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-builds-${{ hashFiles('**/package-lock.json') }}
+          restore-keys:
+            ${{ runner.os }}-builds-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Get yarn cache directory path [yarn]
+        id: yarn-cache-dir-path
+        if: steps.package_manager.outputs.name == 'yarn'
+        run: echo "yarn-cache-dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Use the node_module cache if available [yarn]
+        if: steps.package_manager.outputs.name == 'yarn'
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.yarn-cache-dir }}
+          key: ${{ runner.os }}-builds-${{ hashFiles('**/yarn.lock') }}
+          restore-keys:
+            ${{ runner.os }}-builds-${{ hashFiles('**/yarn.lock') }}
 
       - name: install dependencies
-        run: npm install
+        run: |
+            if [ "${{ steps.package_manager.outputs.name }}" == "yarn" ]; then
+              yarn install
+            elif [ "${{ steps.package_manager.outputs.name }}" == "npm" ]; then
+              npm install
+            fi
 
       - name: run test
-        run: npm run test
+        run: |
+            if [ "${{ steps.package_manager.outputs.name }}" == "yarn" ]; then
+              npm run test
+            elif [ "${{ steps.package_manager.outputs.name }}" == "npm" ]; then
+              npm run test
+            fi
+
+      - name: Test github script
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { appendFileSync } = require('fs');
+            appendFileSync(process.env.GITHUB_ENV, 'enff=123\n');
+
+      - name: Value from env
+        run: echo $enff
 
       - name: test
         id: test
@@ -40,22 +81,10 @@ jobs:
       
       - name: test2
         run: echo "${{ steps.test.outputs.key }}"
-
-      - name: Debug current directory
-        run: pwd
-
-      - name: Determine which library be uses
-        id: package_manager
-        shell: bash
-        run: |
-          echo "key=$([ -f ./yarn.lock ] && echo "yarn" || ([ -f ./package-lock.json ] && echo "npm") || echo "pnpm")" >> $GITHUB_OUTPUT
-        
-      - name: Log package_manager
-        run: echo ${{ steps.package_manager.outputs.key }}
       
 
-      # - name: build docker
-      #   uses: ./.github/actions/build-docker
+      # - name: builds docker
+      #   uses: ./.github/actions/builds-docker
       #   with:
       #     commit-hash: ${{ github.event.pull_request.head.sha }}
       #     docker-password: ${{ secrets.DockerPassword }}
